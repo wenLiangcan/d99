@@ -9,6 +9,7 @@
 # - 99mh.com
 #
 
+import argparse
 import os
 import re
 import shutil
@@ -280,9 +281,13 @@ def download_pic(url, name=None):
         print('Request failed')
 
 
-def batch_download(name_url_pairs):
+def batch_download(name_url_pairs, destdir=None):
+    if destdir is None:
+        destdir = os.getcwd()
+    destdir = p.abspath(destdir)
     with ThreadPoolExecutor(THREADS_NUM) as executor:
         for n, l in name_url_pairs.items():
+            n = p.join(destdir, n)
             mkdirp(p.dirname(n))
             executor.submit(download_pic, l, n)
 
@@ -313,7 +318,13 @@ def parse_selection(volumes_cnt, selection):
 
 
 def main():
-    url = sys.argv[1]
+    app = argparse.ArgumentParser(
+        description='Batch download comic books from 99*.com sites')
+    app.add_argument('url', help="Comic book's url")
+    app.add_argument('-o', '--out', help="Output directory")
+    args = app.parse_args()
+
+    url = args.url
     try:
         site = Site99(url)
     except AssertionError:
@@ -348,9 +359,10 @@ def main():
         pics = vol.get_pics(resp)
         print()
         print('Start to download {} pictures in 《{}》...'.format(len(pics.keys()), vol.name))
-        batch_download(pics)
+        batch_download(pics, args.out)
         print('Finished')
 
 
 if __name__ == '__main__':
     main()
+
