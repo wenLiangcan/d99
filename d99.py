@@ -144,18 +144,16 @@ class Site99(object):
         return ''.join(map(chr, map(int, ss))).split('|')
 
     def _decode_piclst_0_1(self, encoded_lst):
-        key = self.key[0:-1]
-        sep = self.key[-1]
+        *key, sep = self.key
 
         return self._decode_piclst_base(encoded_lst, key, sep)
 
     def _decode_piclst_2(self, encoded_lst):
         d = "abcdefghijklmnopqrstuvwxyz".index(encoded_lst[-1]) + 1
         lst_len = len(encoded_lst)
-        e = encoded_lst[lst_len - d - 12: lst_len - d - 1]
-        new_lst = encoded_lst[0: lst_len -d - 12]
-        key = e[0: len(e) - 1]
-        sep = e[-1]
+        e = encoded_lst[lst_len - d - 12:lst_len - d - 1]
+        new_lst = encoded_lst[0:lst_len -d - 12]
+        *key, sep = e
         return self._decode_piclst_base(new_lst, key, sep)
 
     def _get_server_0_1(self, resp):
@@ -167,7 +165,7 @@ class Site99(object):
     def _get_server_2(self, resp):
         ptn = re.compile(r'var\s+sPath\s*=\s*"(.*?)";')
         spath = ptn.findall(resp.text)[0]
-        return ['http://images.99mh.com/' + spath]
+        return 'http://images.99mh.com/' + spath
 
     @staticmethod
     def _sort_vol_by_title(vols):
