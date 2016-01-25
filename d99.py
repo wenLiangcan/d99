@@ -12,6 +12,7 @@
 import os
 import re
 import shutil
+import string
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from os import path as p
@@ -149,7 +150,7 @@ class Site99(object):
         return self._decode_piclst_base(encoded_lst, key, sep)
 
     def _decode_piclst_2(self, encoded_lst):
-        d = "abcdefghijklmnopqrstuvwxyz".index(encoded_lst[-1]) + 1
+        d = string.ascii_lowercase.index(encoded_lst[-1]) + 1
         lst_len = len(encoded_lst)
         e = encoded_lst[lst_len - d - 12:lst_len - d - 1]
         new_lst = encoded_lst[0:lst_len -d - 12]
@@ -353,4 +354,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
