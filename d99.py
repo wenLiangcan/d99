@@ -55,31 +55,31 @@ class ParseSelectionException(Exception):
 
 
 class Site99(object):
-
-    def __new__(cls, _):
-        cls._DOMAINS = {
+    @staticmethod
+    def _prepare(this):
+        this._DOMAINS = {
             '99manga.com': 0,
             '99comic.com': 1,
             '99mh.com': 2,
         }
 
-        cls._KEYS = ('gsanuxoewrm', 'zhangxoewrm', '',)
+        this._KEYS = ('gsanuxoewrm', 'zhangxoewrm', '',)
 
-        cls._DECODE_ALG = (
-            Site99._decode_piclst_0_1,
-            Site99._decode_piclst_0_1,
-            Site99._decode_piclst_2,
+        this._DECODE_ALG = (
+            this._decode_piclst_0_1,
+            this._decode_piclst_0_1,
+            this._decode_piclst_2,
         )
 
-        cls._CHARSET = ('gb2312', 'gb2312', 'utf-8')
+        this._CHARSET = ('gb2312', 'gb2312', 'utf-8')
 
-        cls._PATTERNS = (
+        this._PATTERNS = (
             r'var\s+PicListUrl\s*=\s*"(.*?)";',
             r'var\s+PicListUrls\s*=\s*"(.*?)";',
             r'var\s+sFiles\s*=\s*"(.*?)";',
         )
 
-        cls._SERVERS_0_1 = (
+        this._SERVERS_0_1 = (
             "http://2.{}:9393/dm01/",
             "http://2.{}:9393/dm02/",
             "http://2.{}:9393/dm03/",
@@ -98,41 +98,38 @@ class Site99(object):
             "http://2.{}:9393/dm16/",
         )
 
-        cls._GET_SERVER = (
-            Site99._get_server_0_1,
-            Site99._get_server_0_1,
-            Site99._get_server_2,
+        this._GET_SERVER = (
+            this._get_server_0_1,
+            this._get_server_0_1,
+            this._get_server_2,
         )
 
-        cls._GET_VOLS = (
-            Site99._get_volumes_0_1,
-            Site99._get_volumes_0_1,
-            Site99._get_volumes_2,
+        this._GET_VOLS = (
+            this._get_volumes_0_1,
+            this._get_volumes_0_1,
+            this._get_volumes_2,
         )
 
-        cls._GET_BOOK_NAMES = (
-            Site99._get_book_name_0_1,
-            Site99._get_book_name_0_1,
-            Site99._get_book_name_2,
+        this._GET_BOOK_NAMES = (
+            this._get_book_name_0_1,
+            this._get_book_name_0_1,
+            this._get_book_name_2,
         )
-
-        return super(Site99, cls).__new__(cls)
 
     def __init__(self, url):
+        self._prepare(self)
+
         self.domain = urlparse.urlsplit(url).netloc
         assert self.domain in self._DOMAINS.keys()
 
-        def obj_method_proxy(method):
-            return lambda *arg, **args: method(self, *arg, **args)
-
         index = self._DOMAINS[self.domain]
-        self._get_server = obj_method_proxy(self._GET_SERVER[index])
+        self._get_server = self._GET_SERVER[index]
         self.key = self._KEYS[index]
-        self._decode_piclst = obj_method_proxy(self._DECODE_ALG[index])
+        self._decode_piclst = self._DECODE_ALG[index]
         self.charset = self._CHARSET[index]
         self.pattern = re.compile(self._PATTERNS[index])
-        self.get_volumes = obj_method_proxy(self._GET_VOLS[index])
-        self.get_book_name = obj_method_proxy(self._GET_BOOK_NAMES[index])
+        self.get_volumes = self._GET_VOLS[index]
+        self.get_book_name = self._GET_BOOK_NAMES[index]
 
     def _extract_encoded_piclst(self, html):
         return self.pattern.findall(html)[0]
@@ -205,6 +202,9 @@ class Site99(object):
         title = soup.select_one('.cTitle').text
         return ' '.join(title.strip().split())
 
+    def get_html(self, url):
+        return get_html(url, self.charset)
+
     def get_piclst(self, resp):
         server = self._get_server(resp)
 
@@ -215,8 +215,10 @@ class Site99(object):
 
 
 class Book(object):
-    def __init__(self, site, html):
-        self.site = site
+    def __init__(self, url):
+        self.site = Site99(url)
+        html = self.site.get_html(url)
+
         self.volumes = self.site.get_volumes(html)
         self.name = self.site.get_book_name(html)
         self.charset = self.site.charset
@@ -250,6 +252,7 @@ class Book(object):
 
 class Volume(object):
     def __init__(self, book, name, url):
+        self.pics = None
         self.book = book
         self.name = name
         self.url = url
@@ -257,16 +260,19 @@ class Volume(object):
 
         self.folder = p.join(self.book.name, self.name).replace(' ', '_')
 
-    def get_pics(self, resp):
-        piclst = self.book.get_piclst(resp)
+    def get_pics(self):
+        if self.pics is None:
+            resp = http_get(self.url, self.charset)
 
-        width = cal_num_width(len(piclst))
-        pairs = {
-            p.join(self.folder, str(i).zfill(width) + p.splitext(l)[-1]): l
-            for i, l in enumerate(piclst)
-        }
+            piclst = self.book.get_piclst(resp)
 
-        return pairs
+            width = cal_num_width(len(piclst))
+            self.pics = {
+                p.join(self.folder, str(i).zfill(width) + p.splitext(l)[-1]): l
+                for i, l in enumerate(piclst)
+            }
+
+        return self.pics
 
 
 def download_pic(url, name=None):
@@ -326,13 +332,11 @@ def main():
 
     url = args.url
     try:
-        site = Site99(url)
+        book = Book(url)
     except AssertionError:
         print('Unsupported link!')
         return
 
-    html = get_html(url, site.charset)
-    book = Book(site, html)
     vol_cnt = len(book)
     print('Found {} volumes in 《{}》:'.format(vol_cnt, book.name))
     print()
@@ -355,8 +359,7 @@ def main():
 
     for i in selection:
         vol = book[i-index_start]
-        resp = http_get(vol.url, vol.charset)
-        pics = vol.get_pics(resp)
+        pics = vol.get_pics()
         print()
         print('Start to download {} pictures in 《{}》...'.format(len(pics.keys()), vol.name))
         batch_download(pics, args.out)
