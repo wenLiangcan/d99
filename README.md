@@ -13,3 +13,9 @@ Batch download comic books from:
 - requests
 - beautifulsoup4
 
+
+## Todos
+
+- Support directly download a volume
+- Check books update
+
