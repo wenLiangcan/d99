@@ -10,6 +10,7 @@
 #
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -298,6 +299,41 @@ def batch_download(name_url_pairs, destdir=None):
             executor.submit(download_pic, l, n)
 
 
+def aria2_batch_download(name_url_pairs, destdir=None, rpc=None):
+    if rpc is None:
+        rpc = 'http://127.0.0.1:6800/jsonrpc'
+
+    jdict = {
+        'jsonrpc': '2.0',
+        'id': 'qwer',
+        'method': 'system.multicall',
+        'params': [],
+    }
+
+    default_opts = {
+        'continue': 'true',
+        'max-connection-per-server': '5',
+        'split': '5',
+        'header': ['User-Agent: {}'.format(HEAD['User-Agent'])]
+    }
+
+    def build_adduri_call(name, url, dest=None):
+        opts = dict(default_opts)
+        opts['out'] = name
+        if dest:
+            opts['dir'] = dest
+        return {
+            'methodName': 'aria2.addUri',
+            'params': [[url], opts]
+        }
+
+    calls = [build_adduri_call(n, l, destdir) for n, l in name_url_pairs.items()]
+    data = dict(jdict)
+    data['params'].append(calls)
+    r = requests.post(rpc, data=json.dumps(data))
+    return r.status_code == 200
+
+
 def parse_selection(volumes_cnt, selection):
     selection = selection.split()
     vnos = []
@@ -328,6 +364,9 @@ def main():
         description='Batch download comic books from 99*.com sites')
     app.add_argument('url', help="Comic book's url")
     app.add_argument('-o', '--out', help="Output directory")
+    app.add_argument('-a', '--aria2', action='store_true',
+                     help="Call Aria2 by JSON RPC to download files")
+    app.add_argument('-r', '--rpc', type=str, help='Aria2 JSON RPC address')
     args = app.parse_args()
 
     url = args.url
@@ -361,9 +400,16 @@ def main():
         vol = book[i-index_start]
         pics = vol.get_pics()
         print()
-        print('Start to download {} pictures in 《{}》...'.format(len(pics.keys()), vol.name))
-        batch_download(pics, args.out)
-        print('Finished')
+        if args.aria2:
+            print('Start to download {} pictures in 《{}》by aria2 ...'.format(len(pics.keys()), vol.name))
+            if aria2_batch_download(pics, args.out, args.rpc):
+                print('Finished')
+            else:
+                print('Failed to call Aria2')
+        else:
+            print('Start to download {} pictures in 《{}》...'.format(len(pics.keys()), vol.name))
+            batch_download(pics, args.out)
+            print('Finished')
 
 
 if __name__ == '__main__':
